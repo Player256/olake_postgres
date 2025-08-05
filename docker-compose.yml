@@ -1,94 +1,100 @@
-# docker-compose.yml (Final Corrected Version)
+version: "3.8"
+
+volumes:
+  pgdata:
+  minio-data:
+  catalog-data:
+  olake-config-data:
+
+networks:
+  net:
+    driver: bridge
+
 services:
-  postgres-source:
-    image: postgres:15-alpine
-    container_name: postgres-source
-    hostname: postgres-source
-    ports: ["5432:5432"]
+  # ----- PostgreSQL -----
+  postgresql:
+    image: postgres:13
+    container_name: postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345
-      POSTGRES_DB: testdb
-    networks: [data-net]
+      POSTGRES_USER: olake
+      POSTGRES_PASSWORD: olake
+      POSTGRES_DB: olakedb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U olake -h localhost -p 5432"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ----- MinIO (S3) -----
   minio:
-    image: minio/minio:latest
+    image: minio/minio
     container_name: minio
-    hostname: minio
-    ports: ["9000:9000", "9001:9001"]
+    command: server --address ":9090" --console-address ":9091" /data
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadminpassword
-    command: server /data --console-address ":9001"
-    networks: [data-net]
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+    ports:
+      - "9090:9090"   # S3 API
+      - "9091:9091"   # Console UI
+    volumes:
+      - minio-data:/data
+    networks:
+      - net
+
+  # ----- Prepare Minio bucket -----
   mc:
-    image: minio/mc:latest
+    image: minio/mc
     container_name: mc
     depends_on:
-      minio:
-        condition: service_healthy
+      - minio
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set local http://minio:9000 minioadmin minioadminpassword;
-      /usr/bin/mc mb --ignore-existing local/warehouse;
-      /usr/bin/mc anonymous set public local/warehouse;
+      until mc alias set minio http://minio:9090 minio minio123; do sleep 1; done;
+      mc mb -p minio/warehouse || true;
+      mc anonymous set public minio/warehouse;
+      echo 'MinIO bucket ready';
       "
-    networks: [data-net]
-  postgres-catalog:
-    image: postgres:15-alpine
-    container_name: postgres-catalog
-    hostname: postgres-catalog
-    environment:
-      POSTGRES_USER: catalog_user
-      POSTGRES_PASSWORD: catalog_password
-      POSTGRES_DB: iceberg_catalog
-    networks: [data-net]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalog_user -d iceberg_catalog"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    networks:
+      - net
+
+  # ----- OLake REST Catalog (Iceberg) -----
   rest:
-    image: tabulario/iceberg-rest:latest
+    image: tabulario/iceberg-rest
     container_name: iceberg-rest
-    ports: ["8181:8181"]
     environment:
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      AWS_REGION: us-east-1
       CATALOG_WAREHOUSE: s3://warehouse/
       CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
-      CATALOG_S3_ENDPOINT: http://minio:9000
-      CATALOG_S3_ACCESS__KEY__ID: minioadmin
-      CATALOG_S3_SECRET__ACCESS__KEY: minioadminpassword
-      CATALOG_JDBC_URL: jdbc:postgresql://postgres-catalog:5432/iceberg_catalog
-      CATALOG_JDBC_USER: catalog_user
-      CATALOG_JDBC_PASSWORD: catalog_password
-    networks: [data-net]
+      CATALOG_S3_ENDPOINT: http://minio:9090
+    ports:
+      - "8181:8181"
+    volumes:
+      - catalog-data:/catalog
     depends_on:
-      postgres-catalog:
+      postgresql:
         condition: service_healthy
       mc:
         condition: service_completed_successfully
+    networks:
+      - net
+
+  # ----- Spark for Iceberg SQL (optional, but demoable) -----
   spark:
     image: tabulario/spark-iceberg:latest
     container_name: spark
-    ports: ["8888:8888", "4040:4040"]
-    networks: [data-net]
-    environment:
-      - SPARK_OPTS=--conf spark.sql.catalog.my_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.my_catalog.type=rest --conf spark.sql.catalog.my_catalog.uri=http://rest:8181 --conf spark.sql.catalog.my_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO --conf spark.sql.catalog.my_catalog.warehouse=s3a://warehouse/ --conf spark.sql.catalog.my_catalog.s3.endpoint=http://minio:9000 --conf spark.sql.catalog.my_catalog.s3.access-key=minioadmin --conf spark.sql.catalog.my_catalog.s3.secret-key=minioadminpassword --conf spark.sql.catalog.my_catalog.s3.path-style-access=true
-    depends_on: [rest]
-networks:
-  data-net:
-    driver: bridge
-volumes:
-  postgres_source_data:
-  minio_data:
-  postgres_catalog_data:
+    ports:
+      - "4040:4040"
+    networks:
+      - net
+    depends_on:
+      - rest
+    entrypoint: ["/bin/sh", "-c", "tail -f /dev/null"] # keeps container running for spark-shell CLI if you want
+

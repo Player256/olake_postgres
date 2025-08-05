@@ -1,8 +1,9 @@
 {
-  "host": "postgres-source",
+  "host": "postgres",
   "port": 5432,
-  "database": "testdb",
+  "database": "olakedb",
   "schema": "public",
-  "username": "postgres",
-  "password": "12345"
+  "username": "olake",
+  "password": "olake"
 }
+
