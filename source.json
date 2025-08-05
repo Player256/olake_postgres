@@ -1,8 +1,18 @@
 {
-  "host": "postgres",
-  "port": 5432,
-  "database": "nessie_db",
-  "schema": "public",
-  "username": "nessie",
-  "password": "nessie"
+    "host": "primary_postgres",
+    "port": 5431,
+    "database": "main",
+    "username": "main",
+    "password": "password",
+    "jdbc_url_params": {},
+    "ssl": {
+        "mode": "disable"
+    },
+    "update_method": {
+        "replication_slot": "postgres_slot",
+        "intial_wait_time": 10
+    },
+    "reader_batch_size": 100000,
+    "max_threads": 5
 }
+

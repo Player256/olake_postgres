@@ -1,112 +1,296 @@
+version: "3"
 
 services:
-  nessie:
-    image: ghcr.io/projectnessie/nessie:latest
-    container_name: nessie
+  # lakekeeper:
+  #   image: &lakekeeper-image ${LAKEKEEPER__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
+  #   pull_policy: &lakekeeper-pull-policy always
+  #   environment: &lakekeeper-environment
+  #     - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+  #     - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://iceberg:password@postgres:5432/iceberg
+  #     - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://iceberg:password@postgres:5432/iceberg
+  #     - LAKEKEEPER__AUTHZ_BACKEND=allowall
+  #     # Externally taken from environment variables if set
+  #     - LAKEKEEPER__OPENID_PROVIDER_URI
+  #     - LAKEKEEPER__OPENID_AUDIENCE
+  #     - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS
+  #     - LAKEKEEPER__UI__OPENID_CLIENT_ID
+  #     - LAKEKEEPER__UI__OPENID_SCOPE
+  #   command: [ "serve" ]
+  #   healthcheck:
+  #     test: [ "CMD", "/home/nonroot/iceberg-catalog", "healthcheck" ]
+  #     interval: 1s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 3s
+  #   depends_on:
+  #     migrate:
+  #       condition: service_completed_successfully
+  #   ports:
+  #     - "8181:8181"
+  #   networks:
+  #     iceberg_net:
+
+
+  # migrate:
+  #   image: *lakekeeper-image
+  #   pull_policy: *lakekeeper-pull-policy
+  #   environment: *lakekeeper-environment
+  #   restart: "no"
+  #   command: [ "migrate" ]
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     iceberg_net:
+
+  primary_postgres:
+    container_name: primary_postgres
+    image: postgres:15
+    hostname: primary_postgres
     ports:
-      - "19120:19120"
+      - "5431:5432"
     environment:
-      - nessie.version.store.type=JDBC
-      - quarkus.datasource.db-kind=postgresql
-      - quarkus.datasource.jdbc.url=jdbc:postgresql://postgres:5432/nessie_db
-      - quarkus.datasource.username=nessie
-      - quarkus.datasource.password=nessie
-      - nessie.catalog.default-warehouse=warehouse
-      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
-      - nessie.catalog.service.s3.default-options.region=us-east-1
-      - nessie.catalog.service.s3.default-options.path-style-access=true
-      - nessie.catalog.service.s3.default-options.endpoint=http://minio:9000/
-      - nessie.catalog.service.s3.default-options.external-endpoint=http://host.docker.internal:9000/
-      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
-      - nessie.catalog.secrets.access-key.name=minio
-      - nessie.catalog.secrets.access-key.secret=minio123
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mc:
-        condition: service_completed_successfully
+      POSTGRES_USER: main
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: main
+    command: >
+      bash -c "apt-get update && apt-get install -y postgresql-15-wal2json && exec docker-entrypoint.sh postgres -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
     networks:
-      - net
+      - iceberg_net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "main", "-d", "main"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  data-loader:
+    image: postgres:15
+    container_name: sample_data_loader
+    environment:
+      PGUSER: main
+      PGPASSWORD: password
+      PGDATABASE: main
+    depends_on:
+      primary_postgres:
+        condition: service_healthy
+    entrypoint: >
+      bash -c " 
+        echo \"Waiting for Postgres to be ready...\"; 
+        until pg_isready -h primary_postgres -p 5432 -U main -d main; do 
+          echo \"Waiting...\"; 
+          sleep 2; 
+        done; 
+        echo \"Creating test table sample_data...\"; 
+        psql -h primary_postgres -U main -d main -c \"CREATE TABLE IF NOT EXISTS sample_data (id SERIAL PRIMARY KEY, str_col TEXT, num_col INT);\"; 
+        echo \"Inserting one test row...\"; 
+        psql -h primary_postgres -U main -d main -c \"INSERT INTO sample_data (str_col, num_col) VALUES ('Hello world', 123);\"; 
+        echo \"Creating orders table and inserting data...\"; 
+        psql -h primary_postgres -U main -d main -c \\\"CREATE TABLE IF NOT EXISTS orders (id SERIAL PRIMARY KEY, product VARCHAR(100), quantity INT, price NUMERIC);\\\"; 
+        psql -h primary_postgres -U main -d main -c \\\"INSERT INTO orders (product, quantity, price) VALUES
+          ('Pen', 10, 1.5),
+          ('Notebook', 5, 3.0),
+          ('Pencil', 12, 0.8),
+          ('Eraser', 7, 0.5),
+          ('Phone', 8, 9.2),
+          ('Laptop', 2, 15.0),
+          ('Marker', 6, 2.0),
+          ('Tablet', 3, 12.5),
+          ('Charger', 4, 5.5),
+          ('Backpack', 1, 25.0),
+          ('Sticky Notes', 20, 0.7),
+          ('Highlighter', 9, 1.2),
+          ('Scissors', 2, 3.5),
+          ('Glue Stick', 5, 0.9),
+          ('USB Drive', 4, 6.0),
+          ('Mouse', 3, 7.5),
+          ('Keyboard', 2, 10.0),
+          ('Monitor', 1, 30.0),
+          ('Desk Lamp', 2, 13.0),
+          ('Whiteboard', 1, 40.0);\\\"; 
+        echo \"Creating logical replication slot...\"; 
+        psql -h primary_postgres -U main -d main -c \"SELECT * FROM pg_create_logical_replication_slot('postgres_slot', 'wal2json');\"; 
+        echo \"Done. Data and replication slot should now exist.\" 
+      "
+    restart: "no"
+    networks:
+      - iceberg_net
+
+  spark-iceberg:
+    image: tabulario/spark-iceberg
+    container_name: spark-iceberg
+    build: spark/
+    networks:
+      iceberg_net:
+    depends_on:
+      - minio
+      - postgres
+    volumes:
+      - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./data/ivy-cache:/root/.ivy2
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    ports:
+      - 8888:8888
+      - 8088:8080
+      - 10000:10000
+      - 10001:10001
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
+    image: minio/minio
     container_name: minio
-    ports:
-      - "9000:9000"
-      - "9090:9090"
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio123
-      MINIO_ADDRESS: ":9000"
-      MINIO_CONSOLE_ADDRESS: ":9090"
-    volumes:
-      - minio-data:/data
-    command: server /data
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=minio
     networks:
-      - net
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
-      interval: 5s
-      timeout: 2s
-      retries: 15
+      iceberg_net:
+        aliases:
+          - warehouse.minio
+    ports:
+      - 9001:9001
+      - 9000:9000
+    volumes:
+      - ./data/minio-data:/data
+    command: [ "server", "/data", "--console-address", ":9001" ]
 
   mc:
-    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
-    container_name: mc
     depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: /bin/bash
-    restart: "no"
-    command: >
-      -c "mc alias set myminio http://minio:9000/ minio minio123 && 
-           mc mb myminio/warehouse --ignore-existing"
+      - minio
+    image: minio/mc
+    container_name: mc
     networks:
-      - net
+      iceberg_net:
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    entrypoint: |
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      if ! /usr/bin/mc ls minio/warehouse > /dev/null 2>&1; then
+        /usr/bin/mc mb minio/warehouse;
+        /usr/bin/mc anonymous set public minio/warehouse;
+      fi;
+      tail -f /dev/null
+      "
+
 
   postgres:
     image: postgres:15
-    container_name: postgres
-    environment:
-      POSTGRES_USER: nessie
-      POSTGRES_PASSWORD: nessie
-      POSTGRES_DB: nessie_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/data
+    container_name: iceberg-postgres
     networks:
-      - net
+      iceberg_net:
+    environment:
+      - POSTGRES_USER=iceberg
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=iceberg
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nessie"]
-      interval: 5s
-      timeout: 2s
-      retries: 10
-  
-    spark:
-      image: tabulario/spark-iceberg:latest
-      container_name: spark
-      networks:
-        - net
-      depends_on:
-        - minio
-      environment:
-        - SPARK_PACKAGES=org.apache.iceberg:iceberg-spark-runtime-3.2_2.12:1.1.0
-        - "SPARK_SUBMIT_OPTIONS=\
-            --packages org.apache.iceberg:iceberg-spark-runtime-3.2_2.12:1.1.0 \
-            --conf spark.sql.catalog.my_catalog=org.apache.iceberg.spark.SparkCatalog \
-            --conf spark.sql.catalog.my_catalog.catalog-impl=org.apache.iceberg.rest.RESTCatalog \
-            --conf spark.sql.catalog.my_catalog.uri=http://iceberg-rest:8181 \
-            --conf spark.sql.catalog.my_catalog.warehouse=s3://warehouse/ \
-            --conf spark.sql.catalog.my_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-            --conf spark.sql.catalog.my_catalog.s3.endpoint=http://minio:9090"
-      entrypoint: ["/bin/sh", "-c", "tail -f /dev/null"]
+      test: [ "CMD", "pg_isready", "-U", "iceberg", "-d", "iceberg" ]
+      interval: 2s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    ports:
+      - 5432:5432
+    volumes:
+      - ./data/postgres-data:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: apache/hive:4.0.0
+    container_name: hive-metastore
+    networks:
+      iceberg_net:
+    ports:
+      - "9083:9083"
+    environment:
+        - SERVICE_NAME=metastore
+    depends_on:
+      - postgres
+    user: root
+    volumes:
+        - ./data/ivy-cache:/opt/ivy-cache
+        - ./hive-site.conf:/opt/hive/conf/hive-site.xml
+    entrypoint: |
+      /bin/sh -c "
+      # Create ivy-cache directories
+      mkdir -p /opt/ivy-cache/jars
+      chmod -R 777 /opt/ivy-cache
+      
+      # Check if curl is available, if not try to use apt-get
+      if ! command -v curl > /dev/null; then
+        if command -v apt-get > /dev/null; then
+          apt-get update && apt-get install -y curl
+        else
+          echo 'Neither curl nor apt-get is available. Cannot download dependencies.'
+          exit 1
+        fi
+      fi
+      
+      # Download dependencies to ivy-cache if they don't exist
+      if [ ! -f /opt/ivy-cache/jars/hadoop-aws-3.3.6.jar ]; then
+        echo 'Downloading hadoop-aws-3.3.6.jar to ivy-cache...'
+        curl -L -o /opt/ivy-cache/jars/hadoop-aws-3.3.6.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.6/hadoop-aws-3.3.6.jar
+        
+        # Verify download was successful
+        if [ ! -f /opt/ivy-cache/jars/hadoop-aws-3.3.6.jar ] || [ ! -s /opt/ivy-cache/jars/hadoop-aws-3.3.6.jar ]; then
+          echo 'Failed to download hadoop-aws-3.3.6.jar. Exiting.'
+          exit 1
+        fi
+      fi
+      
+      if [ ! -f /opt/ivy-cache/jars/aws-java-sdk-bundle-1.11.1026.jar ]; then
+        echo 'Downloading aws-java-sdk-bundle-1.11.1026.jar to ivy-cache...'
+        curl -L -o /opt/ivy-cache/jars/aws-java-sdk-bundle-1.11.1026.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.1026/aws-java-sdk-bundle-1.11.1026.jar
+        
+        # Verify download was successful
+        if [ ! -f /opt/ivy-cache/jars/aws-java-sdk-bundle-1.11.1026.jar ] || [ ! -s /opt/ivy-cache/jars/aws-java-sdk-bundle-1.11.1026.jar ]; then
+          echo 'Failed to download aws-java-sdk-bundle-1.11.1026.jar. Exiting.'
+          exit 1
+        fi
+      fi
+      
+      if [ ! -f /opt/ivy-cache/jars/postgresql-42.5.1.jar ]; then
+        echo 'Downloading postgresql-42.5.1.jar to ivy-cache...'
+        curl -L -o /opt/ivy-cache/jars/postgresql-42.5.1.jar https://repo1.maven.org/maven2/org/postgresql/postgresql/42.5.1/postgresql-42.5.1.jar
+        
+        # Verify download was successful
+        if [ ! -f /opt/ivy-cache/jars/postgresql-42.5.1.jar ] || [ ! -s /opt/ivy-cache/jars/postgresql-42.5.1.jar ]; then
+          echo 'Failed to download postgresql-42.5.1.jar. Exiting.'
+          exit 1
+        fi
+      fi
+      
+      echo 'All dependencies downloaded to ivy-cache. Copying to Hive lib directory...'
+      
+      # Copy the JAR files to Hive's lib directory
+      cp /opt/ivy-cache/jars/hadoop-aws-3.3.6.jar /opt/hive/lib/ || { echo 'Failed to copy hadoop-aws-3.3.6.jar'; exit 1; }
+      cp /opt/ivy-cache/jars/aws-java-sdk-bundle-1.11.1026.jar /opt/hive/lib/ || { echo 'Failed to copy aws-java-sdk-bundle-1.11.1026.jar'; exit 1; }
+      cp /opt/ivy-cache/jars/postgresql-42.5.1.jar /opt/hive/lib/ || { echo 'Failed to copy postgresql-42.5.1.jar'; exit 1; }
+      
+      # Verify files were copied successfully
+      if [ ! -f /opt/hive/lib/hadoop-aws-3.3.6.jar ] || [ ! -f /opt/hive/lib/aws-java-sdk-bundle-1.11.1026.jar ] || [ ! -f /opt/hive/lib/postgresql-42.5.1.jar ]; then
+        echo 'JAR files not found in Hive lib directory. Exiting.'
+        exit 1
+      fi
+      
+      # Fix permissions for Hive directories
+      chown -R hive:hive /opt/hive/lib
+      
+      echo 'JAR files copied to Hive lib directory. Starting hive-metastore...'
+      
+      # Start the hive metastore service
+      sh -c "/entrypoint.sh"
+      "
+
+networks:
+  iceberg_net:
 
 
 volumes:
-  minio-data:
   postgres-data:
-
-networks:
-  net:
-    driver: bridge
+  minio-data:
+  pg-data:

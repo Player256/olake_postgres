@@ -1,0 +1,46 @@
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  product VARCHAR(100),
+  quantity INT,
+  price NUMERIC
+);
+
+INSERT INTO orders (product, quantity, price) VALUES
+  ('Pen', 10, 1.5),
+  ('Notebook', 5, 3.0),
+  ('Pencil', 12, 0.8),
+  ('Eraser', 7, 0.5),
+  ('Phone', 8, 9.2),
+  ('Laptop', 2, 15.0),
+  ('Marker', 6, 2.0),
+  ('Tablet', 3, 12.5),
+  ('Charger', 4, 5.5),
+  ('Backpack', 1, 25.0),
+  ('Sticky Notes', 20, 0.7),
+  ('Highlighter', 9, 1.2),
+  ('Scissors', 2, 3.5),
+  ('Glue Stick', 5, 0.9),
+  ('USB Drive', 4, 6.0),
+  ('Mouse', 3, 7.5),
+  ('Keyboard', 2, 10.0),
+  ('Monitor', 1, 30.0),
+  ('Desk Lamp', 2, 13.0),
+  ('Whiteboard', 1, 40.0);
+
+docker run --pull=always  \
+  --network olake_postgres_iceberg_net \
+  -v "$(pwd):/mnt/config" \
+  olakego/source-postgres:latest \
+  sync \
+  --config /mnt/config/source.json \
+  --catalog /mnt/config/streams.json \
+  --destination /mnt/config/destination.json
+
+docker run --pull=always  \
+  --network olake_postgres_iceberg_net\
+  -v "$(pwd):/mnt/config" \
+  olakego/source-postgres:latest \
+  discover \
+  --config /mnt/config/source.json
+
+  docker exec -it primary_postgres psql -U main -d main
