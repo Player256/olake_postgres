@@ -82,6 +82,15 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
+  
+  spark:
+    image: tabulario/spark-iceberg:latest
+    container_name: spark
+    ports: ["8888:8888", "4040:4040"]
+    networks: [data-net]
+    environment:
+      - SPARK_OPTS=--conf spark.sql.catalog.my_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.my_catalog.type=rest --conf spark.sql.catalog.my_catalog.uri=http://iceberg-rest:8181 --conf spark.sql.catalog.my_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO --conf spark.sql.catalog.my_catalog.warehouse=s3a://warehouse/ --conf spark.sql.catalog.my_catalog.s3.endpoint=http://minio:9000 --conf spark.sql.catalog.my_catalog.s3.access-key=minioadmin --conf spark.sql.catalog.my_catalog.s3.secret-key=minioadminpassword --conf spark.sql.catalog.my_catalog.s3.path-style-access=true
+    depends_on: [iceberg-rest]
 
 volumes:
   minio-data:
