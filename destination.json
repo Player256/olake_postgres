@@ -2,17 +2,13 @@
   "type": "ICEBERG",
   "writer": {
     "catalog_type": "rest",
-    "rest_catalog_url": "http://rest:8181",
-    "iceberg_s3_path": "s3://warehouse/",
-    "endpoint_url": "http://minio:9000",
-    "path_style_access": true,
-    "aws_access_key": "minioadmin",
-    "aws_secret_key": "minioadminpassword",
-    "aws_region": "us-east-1",
-    "iceberg_db": "my_db"
+      "rest_catalog_url": "http://host.docker.internal:19120/iceberg/",
+      "iceberg_s3_path": "s3://warehouse/",
+      "iceberg_db": "iceberg_db",
+      "s3_endpoint": "http://host.docker.internal:9000",
+      "aws_access_key": "minio",
+      "aws_secret_key": "minio123",
+      "aws_region": "us-east-1",
+      "no_identifier_fields": true
   }
 }
-
-
-
-

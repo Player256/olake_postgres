@@ -1,100 +1,92 @@
-version: "3.8"
-
-volumes:
-  pgdata:
-  minio-data:
-  catalog-data:
-  olake-config-data:
-
-networks:
-  net:
-    driver: bridge
 
 services:
-  # ----- PostgreSQL -----
-  postgresql:
-    image: postgres:13
-    container_name: postgres
-    environment:
-      POSTGRES_USER: olake
-      POSTGRES_PASSWORD: olake
-      POSTGRES_DB: olakedb
+  nessie:
+    image: ghcr.io/projectnessie/nessie:latest
+    container_name: nessie
     ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U olake -h localhost -p 5432"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ----- MinIO (S3) -----
-  minio:
-    image: minio/minio
-    container_name: minio
-    command: server --address ":9090" --console-address ":9091" /data
+      - "19120:19120"
     environment:
-      MINIO_ACCESS_KEY: minio
-      MINIO_SECRET_KEY: minio123
-    ports:
-      - "9090:9090"   # S3 API
-      - "9091:9091"   # Console UI
-    volumes:
-      - minio-data:/data
-    networks:
-      - net
-
-  # ----- Prepare Minio bucket -----
-  mc:
-    image: minio/mc
-    container_name: mc
+      - nessie.version.store.type=JDBC
+      - quarkus.datasource.db-kind=postgresql
+      - quarkus.datasource.jdbc.url=jdbc:postgresql://postgres:5432/nessie_db
+      - quarkus.datasource.username=nessie
+      - quarkus.datasource.password=nessie
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.path-style-access=true
+      - nessie.catalog.service.s3.default-options.endpoint=http://minio:9000/
+      - nessie.catalog.service.s3.default-options.external-endpoint=http://host.docker.internal:9000/
+      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      - nessie.catalog.secrets.access-key.name=minio
+      - nessie.catalog.secrets.access-key.secret=minio123
     depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set minio http://minio:9090 minio minio123; do sleep 1; done;
-      mc mb -p minio/warehouse || true;
-      mc anonymous set public minio/warehouse;
-      echo 'MinIO bucket ready';
-      "
-    networks:
-      - net
-
-  # ----- OLake REST Catalog (Iceberg) -----
-  rest:
-    image: tabulario/iceberg-rest
-    container_name: iceberg-rest
-    environment:
-      AWS_ACCESS_KEY_ID: minio
-      AWS_SECRET_ACCESS_KEY: minio123
-      AWS_REGION: us-east-1
-      CATALOG_WAREHOUSE: s3://warehouse/
-      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
-      CATALOG_S3_ENDPOINT: http://minio:9090
-    ports:
-      - "8181:8181"
-    volumes:
-      - catalog-data:/catalog
-    depends_on:
-      postgresql:
+      postgres:
         condition: service_healthy
       mc:
         condition: service_completed_successfully
     networks:
       - net
 
-  # ----- Spark for Iceberg SQL (optional, but demoable) -----
-  spark:
-    image: tabulario/spark-iceberg:latest
-    container_name: spark
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
+    container_name: minio
     ports:
-      - "4040:4040"
+      - "9000:9000"
+      - "9090:9090"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+      MINIO_ADDRESS: ":9000"
+      MINIO_CONSOLE_ADDRESS: ":9090"
+    volumes:
+      - minio-data:/data
+    command: server /data
     networks:
       - net
-    depends_on:
-      - rest
-    entrypoint: ["/bin/sh", "-c", "tail -f /dev/null"] # keeps container running for spark-shell CLI if you want
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 15
 
+  mc:
+    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
+    container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    restart: "no"
+    command: >
+      -c "mc alias set myminio http://minio:9000/ minio minio123 && 
+           mc mb myminio/warehouse --ignore-existing"
+    networks:
+      - net
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: nessie
+      POSTGRES_PASSWORD: nessie
+      POSTGRES_DB: nessie_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/data
+    networks:
+      - net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nessie"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  minio-data:
+  postgres-data:
+
+networks:
+  net:
+    driver: bridge
