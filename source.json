@@ -1,0 +1,8 @@
+{
+  "host": "postgres-source",
+  "port": 5432,
+  "database": "testdb",
+  "schema": "public",
+  "username": "postgres",
+  "password": "12345"
+}
