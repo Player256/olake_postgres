@@ -43,4 +43,8 @@ docker run --pull=always  \
   discover \
   --config /mnt/config/source.json
 
-  docker exec -it primary_postgres psql -U main -d main
+docker exec -it primary_postgres psql -U main -d main
+
+docker exec -it spark-iceberg bash
+
+spark-sql
