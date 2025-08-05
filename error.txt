@@ -1,0 +1,51 @@
+docker run --pull=always    --network olake_postgres_iceberg_net   -v "$(pwd):/mnt/config"   olakego/source-postgres:latest   sync   --config /mnt/config/source.json   --catalog /mnt/config/streams.json   --destination /mnt/config/destination.json
+latest: Pulling from olakego/source-postgres
+Digest: sha256:f31c9a83d753816be9dd0cd4538125de397a16be1b306ebfd6b8fff0910a0965
+Status: Image is up to date for olakego/source-postgres:latest
+2025-08-05T22:39:24Z INFO System has 242GB RAM, setting iceberg writer batch size to 838860800 bytes
+2025-08-05T22:39:24Z INFO Running sync with state: null
+2025-08-05T22:39:24Z INFO Standard Replication is selected
+2025-08-05T22:39:24Z INFO Starting discover for Postgres database main
+2025-08-05T22:39:24Z INFO Valid selected streams are public.orders, public.sample_data
+2025-08-05T22:39:24Z WARN aws_region not explicitly provided, will attempt to use region from environment variables or AWS config/credentials file
+2025-08-05T22:39:24Z INFO AWS credentials not explicitly provided, will use default credential chain (environment variables, AWS config/credentials file, or instance metadata service)
+2025-08-05T22:39:24Z INFO Iceberg JAR file found in base directory: /home/olake-iceberg-java-writer.jar
+2025-08-05T22:39:24Z INFO thread id 1: Connected to new iceberg writer on port 50051 for stream check_01K1Y67BQHYBXRZ0GKBGNHH8BH, configHash check_01K1Y67BQHYBXRZ0GKBGNHH8BH-check-false
+2025-08-05T22:39:25Z INFO [Java-Iceberg:50051] 22:39:25.057 [main] INFO  io.debezium.server.iceberg.OlakeRpcServer - Logs will be output to console only
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051] Exception in thread "main" org.apache.iceberg.exceptions.RESTException: Error occurred while processing GET request
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.HTTPClient.execute(HTTPClient.java:342)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.HTTPClient.execute(HTTPClient.java:262)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.HTTPClient.get(HTTPClient.java:358)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.RESTSessionCatalog.fetchConfig(RESTSessionCatalog.java:1045)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.RESTSessionCatalog.initialize(RESTSessionCatalog.java:254)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.RESTCatalog.initialize(RESTCatalog.java:78)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.CatalogUtil.loadCatalog(CatalogUtil.java:274)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.CatalogUtil.buildIcebergCatalog(CatalogUtil.java:328)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at io.debezium.server.iceberg.OlakeRpcServer.main(OlakeRpcServer.java:101)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051] Caused by: org.apache.hc.client5.http.HttpHostConnectException: Connect to http://localhost:8181 [localhost/127.0.0.1, localhost/0:0:0:0:0:0:0:1] failed: Connection refused
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at java.base/java.net.Socket.connect(Socket.java:633)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.io.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:216)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:490)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:164)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:174)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:144)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ContentCompressionExec.execute(ContentCompressionExec.java:150)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:113)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:110)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:183)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:123)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         at org.apache.iceberg.rest.HTTPClient.execute(HTTPClient.java:305)
+2025-08-05T22:39:25Z ERROR [Java-Iceberg:50051]         ... 8 more
+2025-08-05T22:39:54Z INFO thread id 1: shutting down Iceberg server on port 50051
+2025-08-05T22:39:54Z FATAL failed to test destination: error sending record to Iceberg RPC Server: rpc error: code = DeadlineExceeded desc = latest balancer error: connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:50051: connect: connection refused"
