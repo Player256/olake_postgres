@@ -42,7 +42,6 @@ SELECT * FROM olake_iceberg.orders LIMIT 5;
 | **minio** | Local, S3-compatible object store that holds Iceberg data/manifest files. |
 | **mc** | Helper that boots MinIO, creates the `warehouse` bucket. |
 | **spark-iceberg** | Spark 3.5 image with Iceberg JARs; used for interactive queries. |
-| **hive-metastore** | Optional Hive service for engines that still expect HMS. |
 
 All containers share the `iceberg_net` network, so they can reach each other by service name (e.g., `http://lakekeeper:8181`).
 
