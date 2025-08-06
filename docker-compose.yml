@@ -1,47 +1,47 @@
 version: "3"
 
 services:
-  lakekeeper:
-    image: &lakekeeper-image ${LAKEKEEPER__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
-    pull_policy: &lakekeeper-pull-policy always
-    environment: &lakekeeper-environment
-      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
-      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://iceberg:password@postgres:5432/iceberg
-      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://iceberg:password@postgres:5432/iceberg
-      - LAKEKEEPER__AUTHZ_BACKEND=allowall
-      # Externally taken from environment variables if set
-      - LAKEKEEPER__OPENID_PROVIDER_URI
-      - LAKEKEEPER__OPENID_AUDIENCE
-      - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS
-      - LAKEKEEPER__UI__OPENID_CLIENT_ID
-      - LAKEKEEPER__UI__OPENID_SCOPE
-    command: [ "serve" ]
-    healthcheck:
-      test: [ "CMD", "/home/nonroot/iceberg-catalog", "healthcheck" ]
-      interval: 1s
-      timeout: 10s
-      retries: 3
-      start_period: 3s
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    ports:
-      - "8181:8181"
-    networks:
-      iceberg_net:
+  # lakekeeper:
+  #   image: &lakekeeper-image ${LAKEKEEPER__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
+  #   pull_policy: &lakekeeper-pull-policy always
+  #   environment: &lakekeeper-environment
+  #     - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+  #     - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://iceberg:password@postgres:5432/iceberg
+  #     - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://iceberg:password@postgres:5432/iceberg
+  #     - LAKEKEEPER__AUTHZ_BACKEND=allowall
+  #     # Externally taken from environment variables if set
+  #     - LAKEKEEPER__OPENID_PROVIDER_URI
+  #     - LAKEKEEPER__OPENID_AUDIENCE
+  #     - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS
+  #     - LAKEKEEPER__UI__OPENID_CLIENT_ID
+  #     - LAKEKEEPER__UI__OPENID_SCOPE
+  #   command: [ "serve" ]
+  #   healthcheck:
+  #     test: [ "CMD", "/home/nonroot/iceberg-catalog", "healthcheck" ]
+  #     interval: 1s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 3s
+  #   depends_on:
+  #     migrate:
+  #       condition: service_completed_successfully
+  #   ports:
+  #     - "8181:8181"
+  #   networks:
+  #     iceberg_net:
 
 
-  migrate:
-    image: *lakekeeper-image
-    pull_policy: *lakekeeper-pull-policy
-    environment: *lakekeeper-environment
-    restart: "no"
-    command: [ "migrate" ]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      iceberg_net:
+  # migrate:
+  #   image: *lakekeeper-image
+  #   pull_policy: *lakekeeper-pull-policy
+  #   environment: *lakekeeper-environment
+  #   restart: "no"
+  #   command: [ "migrate" ]
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     iceberg_net:
 
   primary_postgres:
     container_name: primary_postgres
@@ -146,65 +146,89 @@ services:
       - 10000:10000
       - 10001:10001
 
-  minio:
-    image: minio/minio
-    container_name: minio
-    environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=password
-      - MINIO_DOMAIN=minio
-    networks:
-      iceberg_net:
-        aliases:
-          - warehouse.minio
+  nessie:
+    image: ghcr.io/projectnessie/nessie:latest
+    container_name: nessie
     ports:
-      - 9001:9001
-      - 9000:9000
+      - "19120:19120"
+    environment:
+      - nessie.version.store.type=JDBC
+      - quarkus.datasource.db-kind=postgresql
+      - quarkus.datasource.jdbc.url=jdbc:postgresql://postgres:5432/nessie_db
+      - quarkus.datasource.username=nessie
+      - quarkus.datasource.password=nessie
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.path-style-access=true
+      - nessie.catalog.service.s3.default-options.endpoint=http://minio:9000/
+      - nessie.catalog.service.s3.default-options.external-endpoint=http://host.docker.internal:9000/
+      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      - nessie.catalog.secrets.access-key.name=minio
+      - nessie.catalog.secrets.access-key.secret=minio123
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mc:
+        condition: service_completed_successfully
+    networks:
+      - iceberg_net
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+      MINIO_ADDRESS: ":9000"
+      MINIO_CONSOLE_ADDRESS: ":9090"
     volumes:
-      - ./data/minio-data:/data
-    command: [ "server", "/data", "--console-address", ":9001" ]
+      - minio-data:/data
+    command: server /data
+    networks:
+      - iceberg_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 15
 
   mc:
-    depends_on:
-      - minio
-    image: minio/mc
+    image: quay.io/minio/minio:RELEASE.2025-07-18T21-56-31Z
     container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    restart: "no"
+    command: >
+      -c "mc alias set myminio http://minio:9000/ minio minio123 && 
+           mc mb myminio/warehouse --ignore-existing"
     networks:
-      iceberg_net:
-    environment:
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-    entrypoint: |
-      /bin/sh -c "
-      until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
-      if ! /usr/bin/mc ls minio/warehouse > /dev/null 2>&1; then
-        /usr/bin/mc mb minio/warehouse;
-        /usr/bin/mc anonymous set public minio/warehouse;
-      fi;
-      tail -f /dev/null
-      "
-
+      - iceberg_net
 
   postgres:
     image: postgres:15
-    container_name: iceberg-postgres
-    networks:
-      iceberg_net:
+    container_name: postgres
     environment:
-      - POSTGRES_USER=iceberg
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=iceberg
-    healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "iceberg", "-d", "iceberg" ]
-      interval: 2s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
+      POSTGRES_USER: nessie
+      POSTGRES_PASSWORD: nessie
+      POSTGRES_DB: nessie_db
     ports:
-      - 5432:5432
+      - "5432:5432"
     volumes:
-      - ./data/postgres-data:/var/lib/postgresql/data
+      - postgres-data:/data
+    networks:
+      - iceberg_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nessie"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
 
   hive-metastore:
     image: apache/hive:4.0.0

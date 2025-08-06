@@ -2,9 +2,13 @@
   "type": "ICEBERG",
   "writer": {
     "catalog_type": "rest",
-    "normalization": false,
-    "rest_catalog_url": "http://lakekeeper:8181/catalog",
-    "iceberg_s3_path": "warehouse",
-    "iceberg_db": "olake_iceberg"
+      "rest_catalog_url": "http://host.docker.internal:19120/iceberg/",
+      "iceberg_s3_path": "s3://warehouse/",
+      "iceberg_db": "iceberg_db",
+      "s3_endpoint": "http://host.docker.internal:9000",
+      "aws_access_key": "minio",
+      "aws_secret_key": "minio123",
+      "aws_region": "us-east-1",
+      "no_identifier_fields": true
   }
-}  
+}
