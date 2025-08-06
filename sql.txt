@@ -52,4 +52,4 @@ docker exec -it primary_postgres psql -U main -d main
 ###############---OPEN SHELL OF THE SPARK ENGINE FOR QUERYING---###############
 docker exec -it spark-iceberg bash
 spark-sql
-from 
+SELECT * FROM CATALOG_NAME.ICEBERG_DATABASE_NAME.TABLE_NAME;
