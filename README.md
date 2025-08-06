@@ -1,5 +1,7 @@
 # “PostgreSQL ➜ OLake ➜ Iceberg ➜ MinIO ➜ Spark Data Pipeline” Demo
 
+### [Loom Link](https://www.loom.com/share/b052365c6529427484b0ffecb08334c8)
+
 This repository spins up an end-to-end **lakehouse** on your local system.  
 
 You will:
@@ -8,6 +10,7 @@ You will:
 3. Query the Iceberg table from **Apache Spark**.
 
 The flow looks like this:
+
 ![](./assets/olake_postgres_diagram.png)
 
 
@@ -21,13 +24,14 @@ docker compose up --build -d
 **discover** command       # or run the discover command below
 
 # 3. Sync Postgres → Iceberg (files land in MinIO)
-**make** sync            # or run the sync command below
+**sync**  command            # or run the sync command below
 
 # 4. Open Spark SQL shell
 spark-sql           # enters spark-sql with Iceberg catalog pre-wired
 
 # 5. Query the lakehouse
-SELECT * FROM olake_iceberg.orders LIMIT 5;
+SELECT * FROM CATALOG_NAME.ICEBERG_DATABASE_NAME.TABLE_NAME;
+In this case table_name: orders;
 ```
 
 ## 1. Services
@@ -41,7 +45,6 @@ SELECT * FROM olake_iceberg.orders LIMIT 5;
 | **minio** | Local, S3-compatible object store that holds Iceberg data/manifest files. |
 | **mc** | Helper that boots MinIO, creates the `warehouse` bucket. |
 | **spark-iceberg** | Spark 3.5 image with Iceberg JARs; used for interactive queries. |
-| **hive-metastore** | Optional Hive service for engines that still expect HMS. |
 
 All containers share the `iceberg_net` network, so they can reach each other by service name (e.g., `http://lakekeeper:8181`).
 
@@ -140,16 +143,7 @@ SELECT COUNT(*) FROM olake_iceberg.orders
   VERSION AS OF ;
 ```
 
-## 6. Web UIs
-
-| URL | What you’ll see |
-|-----|-----------------|
-| http://localhost:9001 | MinIO console (user **admin** / **password**). |
-| http://localhost:8181/ui | Lakekeeper web UI |
-| http://localhost:8088 | Spark History / Web UI. |
-| http://localhost:8888 | Jupyter notebook on Spark driver |
-
-## 7. Tear down
+## 6. Tear down
 
 ```bash
 docker compose down -v     # stops containers & removes volumes
