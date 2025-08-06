@@ -141,16 +141,7 @@ SELECT COUNT(*) FROM olake_iceberg.orders
   VERSION AS OF ;
 ```
 
-## 6. Web UIs
-
-| URL | What you’ll see |
-|-----|-----------------|
-| http://localhost:9001 | MinIO console (user **admin** / **password**). |
-| http://localhost:8181/ui | Lakekeeper web UI |
-| http://localhost:8088 | Spark History / Web UI. |
-| http://localhost:8888 | Jupyter notebook on Spark driver |
-
-## 7. Tear down
+## 6. Tear down
 
 ```bash
 docker compose down -v     # stops containers & removes volumes
