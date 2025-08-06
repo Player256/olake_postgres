@@ -28,7 +28,8 @@ docker compose up --build -d
 spark-sql           # enters spark-sql with Iceberg catalog pre-wired
 
 # 5. Query the lakehouse
-SELECT * FROM olake_iceberg.orders LIMIT 5;
+SELECT * FROM CATALOG_NAME.ICEBERG_DATABASE_NAME.TABLE_NAME;
+In this case table_name: orders;
 ```
 
 ## 1. Services
