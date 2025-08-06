@@ -1,5 +1,7 @@
 # “PostgreSQL ➜ OLake ➜ Iceberg ➜ MinIO ➜ Spark Data Pipeline” Demo
 
+### [Loom Link](https://www.loom.com/share/b052365c6529427484b0ffecb08334c8)
+
 This repository spins up an end-to-end **lakehouse** on your local system.  
 
 You will:
