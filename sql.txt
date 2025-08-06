@@ -1,3 +1,4 @@
+###############---SQL COMMANDS---###############
 CREATE TABLE orders (
   id SERIAL PRIMARY KEY,
   product VARCHAR(100),
@@ -27,6 +28,7 @@ INSERT INTO orders (product, quantity, price) VALUES
   ('Desk Lamp', 2, 13.0),
   ('Whiteboard', 1, 40.0);
 
+###############---SYNC COMAND---###############
 docker run --pull=always  \
   --network olake_postgres_iceberg_net \
   -v "$(pwd):/mnt/config" \
@@ -36,6 +38,7 @@ docker run --pull=always  \
   --catalog /mnt/config/streams.json \
   --destination /mnt/config/destination.json
 
+###############---DISCOVER COMAND---###############
 docker run --pull=always  \
   --network olake_postgres_iceberg_net\
   -v "$(pwd):/mnt/config" \
@@ -43,8 +46,10 @@ docker run --pull=always  \
   discover \
   --config /mnt/config/source.json
 
+###############---OPEN SHELL OF THE POSTGRES DB---###############
 docker exec -it primary_postgres psql -U main -d main
 
+###############---OPEN SHELL OF THE SPARK ENGINE FOR QUERYING---###############
 docker exec -it spark-iceberg bash
-
 spark-sql
+from 
