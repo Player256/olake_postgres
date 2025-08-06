@@ -22,7 +22,7 @@ docker compose up --build -d
 **discover** command       # or run the discover command below
 
 # 3. Sync Postgres → Iceberg (files land in MinIO)
-**make** sync            # or run the sync command below
+**sync**  command            # or run the sync command below
 
 # 4. Open Spark SQL shell
 spark-sql           # enters spark-sql with Iceberg catalog pre-wired
