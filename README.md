@@ -8,7 +8,8 @@ You will:
 3. Query the Iceberg table from **Apache Spark**.
 
 The flow looks like this:
-![](olake_postgres/assets/olake_postgres_diagram.png)
+
+![](./assets/olake_postgres_diagram.png)
 
 
 ## TLDR;
